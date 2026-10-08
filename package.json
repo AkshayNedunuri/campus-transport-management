@@ -1,0 +1,17 @@
+{
+  "name": "lpu-campus-transport-management",
+  "version": "1.0.0",
+  "description": "Lovely Professional University (LPU) - Campus Transport Management System",
+  "main": "backend/src/server.js",
+  "scripts": {
+    "install:all": "npm --prefix backend install && npm --prefix frontend install",
+    "build": "npm --prefix frontend install && npm --prefix frontend run build && npm --prefix backend install",
+    "seed": "node backend/scripts/seed.js",
+    "start": "node backend/src/server.js",
+    "dev:backend": "npm --prefix backend run dev",
+    "dev:frontend": "npm --prefix frontend run dev"
+  },
+  "keywords": ["lpu", "transit", "gps", "react", "nodejs", "express", "mongodb"],
+  "author": "Akshay Nedunuri",
+  "license": "ISC"
+}

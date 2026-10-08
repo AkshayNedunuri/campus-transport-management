@@ -74,8 +74,10 @@ if (process.env.NODE_ENV !== 'production') {
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Healthcheck Route
-app.get('/', (req, res) => {
+const path = require('path');
+
+// API Healthcheck Route
+app.get('/api/health', (req, res) => {
   res.json({
     success: true,
     message: 'Campus Transport Management System API is running smoothly',
@@ -94,6 +96,28 @@ app.use('/api/trips', tripRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/complaints', complaintRoutes);
 app.use('/api/admin', adminRoutes);
+
+// In production or unified deployment: serve built frontend static assets if available
+const frontendDistPath = path.join(__dirname, '../../frontend/dist');
+const fs = require('fs');
+
+if (fs.existsSync(frontendDistPath)) {
+  app.use(express.static(frontendDistPath));
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api')) return next();
+    res.sendFile(path.join(frontendDistPath, 'index.html'));
+  });
+} else {
+  // Fallback API root response
+  app.get('/', (req, res) => {
+    res.json({
+      success: true,
+      message: 'Campus Transport Management System API is live. Connect frontend to /api routes.',
+      timestamp: new Date(),
+      simulation: simulationService.getStatus(),
+    });
+  });
+}
 
 // Centralized Error Handling
 app.use(errorHandler);
