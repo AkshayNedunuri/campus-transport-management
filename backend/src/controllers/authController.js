@@ -9,6 +9,15 @@ const generateToken = (id) => {
   });
 };
 
+const withTimeout = (promise, ms = 1500) => {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('DB operation timed out')), ms)
+    ),
+  ]);
+};
+
 // Fallback demo accounts for instant live evaluation when DB is pending
 const DEMO_USERS = {
   'student@demo.com': {
@@ -56,19 +65,22 @@ const register = async (req, res, next) => {
 
     if (mongoose.connection.readyState === 1) {
       try {
-        const existingUser = await User.findOne({ email }).maxTimeMS(2500);
+        const existingUser = await withTimeout(User.findOne({ email }), 1500);
         if (existingUser) {
           return errorResponse(res, 400, 'An account with this email already exists');
         }
 
-        const user = await User.create({
-          name,
-          email,
-          password,
-          role: role || 'student',
-          studentId: studentId || '',
-          phone: phone || '',
-        });
+        const user = await withTimeout(
+          User.create({
+            name,
+            email,
+            password,
+            role: role || 'student',
+            studentId: studentId || '',
+            phone: phone || '',
+          }),
+          2000
+        );
 
         const token = generateToken(user._id);
         return successResponse(res, 201, 'User registered successfully', {
@@ -136,11 +148,10 @@ const login = async (req, res, next) => {
       });
     }
 
-    // 2. Check database if connected (with 2.5s strict timeout)
+    // 2. Check database if connected (with 1.5s strict timeout)
     if (mongoose.connection.readyState === 1) {
       try {
-        const dbQuery = User.findOne({ email: cleanEmail }).select('+password').maxTimeMS(2500);
-        const user = await dbQuery;
+        const user = await withTimeout(User.findOne({ email: cleanEmail }).select('+password'), 1500);
         if (user) {
           const isMatch = await user.matchPassword(password);
           if (isMatch) {
@@ -186,10 +197,10 @@ const getMe = async (req, res, next) => {
 
     if (mongoose.connection.readyState === 1) {
       try {
-        const user = await User.findById(req.user._id)
-          .populate('favoriteStops')
-          .populate('favoriteRoutes')
-          .maxTimeMS(2500);
+        const user = await withTimeout(
+          User.findById(req.user._id).populate('favoriteStops').populate('favoriteRoutes'),
+          1500
+        );
 
         if (user) {
           return successResponse(res, 200, 'Current user retrieved', { user });
