@@ -1,0 +1,83 @@
+@import "leaflet/dist/leaflet.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-slate-50 text-slate-800 antialiased font-sans min-h-screen selection:bg-indigo-500 selection:text-white;
+  }
+}
+
+/* Leaflet Custom Marker & Map Tweaks */
+.leaflet-container {
+  width: 100%;
+  height: 100%;
+  border-radius: 0.75rem;
+  z-index: 10;
+}
+
+/* Custom Bus Marker Pulse Animation */
+@keyframes bus-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(79, 70, 229, 0.6);
+  }
+  70% {
+    box-shadow: 0 0 0 14px rgba(79, 70, 229, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(79, 70, 229, 0);
+  }
+}
+
+.shuttle-marker-icon {
+  background: #4f46e5;
+  color: white;
+  border: 2.5px solid #ffffff;
+  border-radius: 9999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
+  animation: bus-pulse 2s infinite;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.shuttle-marker-icon.delayed {
+  background: #f59e0b;
+  animation: none;
+}
+
+.stop-marker-icon {
+  background: #ffffff;
+  color: #1e293b;
+  border: 2px solid #64748b;
+  border-radius: 9999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+  transition: transform 0.2s ease;
+}
+
+.stop-marker-icon:hover {
+  transform: scale(1.15);
+  border-color: #4f46e5;
+}
+
+/* Scrollbar beautification */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
