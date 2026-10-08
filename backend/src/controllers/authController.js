@@ -122,10 +122,21 @@ const login = async (req, res, next) => {
 
     const cleanEmail = email.trim().toLowerCase();
 
-    // Check database if connected
+    // 1. Check demo accounts FIRST for instant response without DB network wait
+    if (DEMO_USERS[cleanEmail] && (password === 'password123' || password.length >= 6)) {
+      const demoUser = DEMO_USERS[cleanEmail];
+      const token = generateToken(demoUser._id);
+      return successResponse(res, 200, 'Login successful (Demo Mode)', {
+        token,
+        user: demoUser,
+      });
+    }
+
+    // 2. Check database if connected (with 2.5s strict timeout)
     if (mongoose.connection.readyState === 1) {
       try {
-        const user = await User.findOne({ email: cleanEmail }).select('+password');
+        const dbQuery = User.findOne({ email: cleanEmail }).select('+password').maxTimeMS(2500);
+        const user = await dbQuery;
         if (user) {
           const isMatch = await user.matchPassword(password);
           if (isMatch) {
@@ -146,18 +157,8 @@ const login = async (req, res, next) => {
           }
         }
       } catch (dbErr) {
-        console.warn('[Auth Warning] DB query failed, using demo fallback:', dbErr.message);
+        console.warn('[Auth Warning] DB query failed or timed out:', dbErr.message);
       }
-    }
-
-    // Demo account instant fallback (student@demo.com, admin@demo.com, driver@demo.com)
-    if (DEMO_USERS[cleanEmail] && (password === 'password123' || password.length >= 6)) {
-      const demoUser = DEMO_USERS[cleanEmail];
-      const token = generateToken(demoUser._id);
-      return successResponse(res, 200, 'Login successful (Demo Mode)', {
-        token,
-        user: demoUser,
-      });
     }
 
     return errorResponse(res, 401, 'Invalid email or password');
