@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Shuttle = require('../models/Shuttle');
 const ShuttleLocation = require('../models/ShuttleLocation');
 const Route = require('../models/Route');
@@ -119,6 +120,18 @@ const FLEET_SCHEDULES = {
   },
 };
 
+// Fallback memory fleet when DB connection is initialising or pending IP whitelist
+const FALLBACK_FLEET = [
+  { _id: 'mem_shuttle_101', shuttleNumber: 'LPU-Shuttle-101', capacity: 50, categoryKey: 'AC_BUS', routeName: 'Campus Express Loop' },
+  { _id: 'mem_shuttle_102', shuttleNumber: 'LPU-Shuttle-102', capacity: 50, categoryKey: 'AC_BUS', routeName: 'Academic Quad Rapid' },
+  { _id: 'mem_mini_201', shuttleNumber: 'LPU-Mini-201', capacity: 35, categoryKey: 'MINI_BUS', routeName: 'Boys Hostels BH Loop' },
+  { _id: 'mem_mini_202', shuttleNumber: 'LPU-Mini-202', capacity: 35, categoryKey: 'MINI_BUS', routeName: 'Girls Hostels GH Direct' },
+  { _id: 'mem_train_501', shuttleNumber: 'LPU-BuggyTrain-501', capacity: 8, categoryKey: 'BUGGY_TRAIN', routeName: 'Electric Buggy Train' },
+  { _id: 'mem_train_502', shuttleNumber: 'LPU-BuggyTrain-502', capacity: 8, categoryKey: 'BUGGY_TRAIN', routeName: 'Electric Buggy Train' },
+  { _id: 'mem_erick_301', shuttleNumber: 'LPU-ERick-301', capacity: 6, categoryKey: 'E_RICKSHAW', routeName: 'Hostel Hop E-Rickshaw' },
+  { _id: 'mem_night_401', shuttleNumber: 'LPU-Night-401', capacity: 50, categoryKey: 'NIGHT_SHUTTLE', routeName: 'Night Owl Safety' },
+];
+
 function getVehicleCategory(shuttleNumber = '') {
   if (shuttleNumber.includes('BuggyTrain') || shuttleNumber.includes('Train') || shuttleNumber.includes('BT')) {
     return FLEET_SCHEDULES.BUGGY_TRAIN;
@@ -162,7 +175,6 @@ class SimulationService {
   }
 
   getScheduleStatus() {
-    // Current time in IST (UTC+5:30)
     const now = new Date();
     const utc = now.getTime() + now.getTimezoneOffset() * 60000;
     const istDate = new Date(utc + 3600000 * 5.5);
@@ -233,15 +245,23 @@ class SimulationService {
     this.isRunning = true;
     console.log('[Simulation Service] LPU GPS multi-fleet simulation started.');
 
-    try {
-      const shuttles = await Shuttle.find({}).limit(40);
-      shuttles.forEach((s, idx) => {
+    if (mongoose.connection.readyState === 1) {
+      try {
+        const shuttles = await Shuttle.find({}).limit(40);
+        shuttles.forEach((s, idx) => {
+          const isTrain = s.shuttleNumber.includes('BuggyTrain');
+          const waypoints = isTrain ? innerQuadWaypoints : campusWaypoints;
+          this.shuttleIndices[s._id.toString()] = (idx * 2) % waypoints.length;
+        });
+      } catch (e) {
+        console.error('[Simulation Service] Error fetching initial shuttles:', e.message);
+      }
+    } else {
+      FALLBACK_FLEET.forEach((s, idx) => {
         const isTrain = s.shuttleNumber.includes('BuggyTrain');
         const waypoints = isTrain ? innerQuadWaypoints : campusWaypoints;
-        this.shuttleIndices[s._id.toString()] = (idx * 2) % waypoints.length;
+        this.shuttleIndices[s._id] = (idx * 3) % waypoints.length;
       });
-    } catch (e) {
-      console.error('[Simulation Service] Error fetching initial shuttles:', e);
     }
 
     if (this.io) {
@@ -267,6 +287,80 @@ class SimulationService {
     }
   }
 
+  emitInMemorySimulation(schedule, istDate) {
+    for (const shuttle of FALLBACK_FLEET) {
+      const id = shuttle._id;
+      const cat = getVehicleCategory(shuttle.shuttleNumber);
+      const isCatActive = isCategoryActiveNow(cat, istDate);
+      const shouldRun = this.timingMode === 'DEMO_OVERRIDE' || isCatActive;
+
+      const isTrain = cat.categoryKey === 'BUGGY_TRAIN';
+      const routeWaypoints = isTrain ? innerQuadWaypoints : campusWaypoints;
+
+      let currentIndex = this.shuttleIndices[id] || 0;
+      let nextIndex = (currentIndex + 1) % routeWaypoints.length;
+      this.shuttleIndices[id] = nextIndex;
+
+      const nextPt = routeWaypoints[nextIndex];
+
+      if (!shouldRun) {
+        const offDutyPayload = {
+          shuttleId: shuttle._id,
+          shuttleNumber: shuttle.shuttleNumber,
+          category: cat.type,
+          categoryKey: cat.categoryKey,
+          latitude: LPU_DEPOT.lat,
+          longitude: LPU_DEPOT.lng,
+          speed: 0,
+          heading: 0,
+          currentPassengerCount: 0,
+          capacity: shuttle.capacity,
+          occupancyPercentage: 0,
+          occupancyStatus: { label: 'Off-Duty', color: 'slate', code: 'OFF_DUTY' },
+          status: 'OFF_DUTY',
+          nextStopName: `Closed for Day (Operating Hours: ${cat.window})`,
+          eta: `Resumes ${cat.window.split('-')[0].trim()}`,
+          etaMinutes: null,
+          assignedRoute: { routeName: shuttle.routeName },
+          isSimulated: true,
+          operatingWindow: cat.window,
+        };
+        if (this.io) this.io.emit('shuttle:location:update', offDutyPayload);
+        continue;
+      }
+
+      const jitterLat = (Math.random() - 0.5) * 0.00012;
+      const jitterLng = (Math.random() - 0.5) * 0.00012;
+      const newLat = parseFloat((nextPt.lat + jitterLat).toFixed(6));
+      const newLng = parseFloat((nextPt.lng + jitterLng).toFixed(6));
+      const simulatedSpeed = isTrain ? 14 : 22;
+
+      const updatePayload = {
+        shuttleId: shuttle._id,
+        shuttleNumber: shuttle.shuttleNumber,
+        category: cat.type,
+        categoryKey: cat.categoryKey,
+        latitude: newLat,
+        longitude: newLng,
+        speed: simulatedSpeed,
+        heading: 90,
+        currentPassengerCount: Math.floor(shuttle.capacity * 0.6),
+        capacity: shuttle.capacity,
+        occupancyPercentage: 60,
+        occupancyStatus: { label: 'Moderate', color: 'yellow', code: 'MODERATE' },
+        status: 'ACTIVE',
+        nextStopName: nextPt.name,
+        eta: '3 mins',
+        etaMinutes: 3,
+        assignedRoute: { routeName: shuttle.routeName },
+        isSimulated: true,
+        operatingWindow: cat.window,
+      };
+
+      if (this.io) this.io.emit('shuttle:location:update', updatePayload);
+    }
+  }
+
   async tick() {
     try {
       const schedule = this.getScheduleStatus();
@@ -274,11 +368,22 @@ class SimulationService {
       const utc = now.getTime() + now.getTimezoneOffset() * 60000;
       const istDate = new Date(utc + 3600000 * 5.5);
 
+      // If database connection is not established, stream in-memory fallback vehicles smoothly
+      if (mongoose.connection.readyState !== 1) {
+        this.emitInMemorySimulation(schedule, istDate);
+        if (this.io) this.io.emit('schedule:status', schedule);
+        return;
+      }
+
       const shuttles = await Shuttle.find({})
         .populate('assignedRoute')
         .populate('driver', 'name phone');
 
-      if (!shuttles || shuttles.length === 0) return;
+      if (!shuttles || shuttles.length === 0) {
+        this.emitInMemorySimulation(schedule, istDate);
+        if (this.io) this.io.emit('schedule:status', schedule);
+        return;
+      }
 
       for (const shuttle of shuttles) {
         const id = shuttle._id.toString();
