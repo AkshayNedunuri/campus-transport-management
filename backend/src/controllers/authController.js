@@ -55,34 +55,38 @@ const register = async (req, res, next) => {
     }
 
     if (mongoose.connection.readyState === 1) {
-      const existingUser = await User.findOne({ email });
-      if (existingUser) {
-        return errorResponse(res, 400, 'An account with this email already exists');
+      try {
+        const existingUser = await User.findOne({ email }).maxTimeMS(2500);
+        if (existingUser) {
+          return errorResponse(res, 400, 'An account with this email already exists');
+        }
+
+        const user = await User.create({
+          name,
+          email,
+          password,
+          role: role || 'student',
+          studentId: studentId || '',
+          phone: phone || '',
+        });
+
+        const token = generateToken(user._id);
+        return successResponse(res, 201, 'User registered successfully', {
+          token,
+          user: {
+            _id: user._id,
+            name: user.name,
+            email: user.email,
+            role: user.role,
+            studentId: user.studentId,
+            phone: user.phone,
+            favoriteStops: user.favoriteStops,
+            favoriteRoutes: user.favoriteRoutes,
+          },
+        });
+      } catch (dbErr) {
+        console.warn('[Register Warning] DB creation failed or timed out:', dbErr.message);
       }
-
-      const user = await User.create({
-        name,
-        email,
-        password,
-        role: role || 'student',
-        studentId: studentId || '',
-        phone: phone || '',
-      });
-
-      const token = generateToken(user._id);
-      return successResponse(res, 201, 'User registered successfully', {
-        token,
-        user: {
-          _id: user._id,
-          name: user.name,
-          email: user.email,
-          role: user.role,
-          studentId: user.studentId,
-          phone: user.phone,
-          favoriteStops: user.favoriteStops,
-          favoriteRoutes: user.favoriteRoutes,
-        },
-      });
     }
 
     // In-memory registration fallback if DB is pending setup
@@ -181,12 +185,17 @@ const getMe = async (req, res, next) => {
     }
 
     if (mongoose.connection.readyState === 1) {
-      const user = await User.findById(req.user._id)
-        .populate('favoriteStops')
-        .populate('favoriteRoutes');
+      try {
+        const user = await User.findById(req.user._id)
+          .populate('favoriteStops')
+          .populate('favoriteRoutes')
+          .maxTimeMS(2500);
 
-      if (user) {
-        return successResponse(res, 200, 'Current user retrieved', { user });
+        if (user) {
+          return successResponse(res, 200, 'Current user retrieved', { user });
+        }
+      } catch (dbErr) {
+        console.warn('[GetMe Warning] DB user fetch failed or timed out:', dbErr.message);
       }
     }
 
