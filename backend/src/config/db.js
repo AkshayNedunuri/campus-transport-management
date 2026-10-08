@@ -8,6 +8,8 @@ const connectDB = async () => {
     console.warn('⚠️ Please add your MongoDB Atlas connection string to Render Environment tab.\n');
   }
 
+  mongoose.set('bufferCommands', false);
+
   try {
     const conn = await mongoose.connect(uri, {
       serverSelectionTimeoutMS: 8000,
