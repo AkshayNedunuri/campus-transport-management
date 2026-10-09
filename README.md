@@ -1,5 +1,11 @@
 # 🚌 Lovely Professional University (LPU) - Campus Transport Management System
 
+[![Live Demo](https://img.shields.io/badge/Live_Demo-Render-46E3B7?style=for-the-badge&logo=render&logoColor=white)](https://campus-transport-management.onrender.com)
+[![Status](https://img.shields.io/badge/Status-Online_%26_Operational-brightgreen?style=for-the-badge)](https://campus-transport-management.onrender.com)
+[![MongoDB Atlas](https://img.shields.io/badge/Database-MongoDB_Atlas-47A248?style=for-the-badge&logo=mongodb&logoColor=white)](https://cloud.mongodb.com)
+
+> 🌐 **Live Web Application**: [https://campus-transport-management.onrender.com](https://campus-transport-management.onrender.com)
+
 A full-stack campus transit management and real-time GPS tracking application designed for **Lovely Professional University (LPU)**, Phagwara, Punjab.
 
 ---
