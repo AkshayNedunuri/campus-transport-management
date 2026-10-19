@@ -75,14 +75,21 @@ if (process.env.NODE_ENV !== 'production') {
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-const path = require('path');
+const mongoose = require('mongoose');
 
 // API Healthcheck Route
 app.get('/api/health', (req, res) => {
+  const dbState = mongoose.connection.readyState;
+  const dbStatus = dbState === 1 ? 'connected' : dbState === 2 ? 'connecting' : 'disconnected';
+
   res.json({
     success: true,
     message: 'Campus Transport Management System API is running smoothly',
     timestamp: new Date(),
+    database: {
+      status: dbStatus,
+      readyState: dbState,
+    },
     simulation: simulationService.getStatus(),
   });
 });

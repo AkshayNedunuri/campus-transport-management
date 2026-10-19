@@ -1,18 +1,32 @@
 const mongoose = require('mongoose');
 
+function sanitizeMongoUri(rawUri) {
+  if (!rawUri) return rawUri;
+  try {
+    const match = rawUri.match(/^(mongodb(?:\+srv)?:\/\/)([^:]+):(.+)@([^@\/]+)(.*)$/);
+    if (match) {
+      const [, proto, user, pass, host, rest] = match;
+      return `${proto}${encodeURIComponent(decodeURIComponent(user))}:${encodeURIComponent(decodeURIComponent(pass))}@${host}${rest}`;
+    }
+  } catch {
+    // fallback
+  }
+  return rawUri;
+}
+
 const connectDB = async () => {
-  const uri = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/campus_transport';
-  
+  const rawUri = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/campus_transport';
+  const uri = sanitizeMongoUri(rawUri);
+
   if (!process.env.MONGO_URI && process.env.NODE_ENV === 'production') {
     console.warn('\n⚠️ [MongoDB Warning]: MONGO_URI is not set in your environment variables.');
     console.warn('⚠️ Please add your MongoDB Atlas connection string to Render Environment tab.\n');
   }
 
-  mongoose.set('bufferCommands', false);
-
   try {
     const conn = await mongoose.connect(uri, {
-      serverSelectionTimeoutMS: 8000,
+      serverSelectionTimeoutMS: 10000,
+      connectTimeoutMS: 10000,
     });
     console.log(`[MongoDB Connected]: ${conn.connection.host}`);
     return conn;

@@ -3,7 +3,7 @@ const User = require('../models/User');
 const { errorResponse } = require('../utils/responseHandler');
 
 // Race promise against a timeout so DB never blocks more than ms
-const withTimeout = (promise, ms = 1500) =>
+const withTimeout = (promise, ms = 8000) =>
   Promise.race([
     promise,
     new Promise((_, reject) =>
@@ -53,10 +53,10 @@ const requireAuth = async (req, res, next) => {
       return next();
     }
 
-    // Real DB user — with 1.5s timeout so Atlas network issues don't block
+    // Real DB user — with 8s timeout so Atlas network issues don't block
     let user = null;
     try {
-      user = await withTimeout(User.findById(decoded.id).select('-password'), 1500);
+      user = await withTimeout(User.findById(decoded.id).select('-password'), 8000);
     } catch (dbErr) {
       console.warn('[Auth Middleware] DB lookup failed or timed out:', dbErr.message);
     }

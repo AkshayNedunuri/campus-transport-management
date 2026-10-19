@@ -9,7 +9,7 @@ const generateToken = (id) => {
 };
 
 // Race a promise against a timeout — DB never hangs more than `ms` milliseconds
-const withTimeout = (promise, ms = 1500) =>
+const withTimeout = (promise, ms = 8000) =>
   Promise.race([
     promise,
     new Promise((_, reject) =>
@@ -64,64 +64,43 @@ const register = async (req, res, next) => {
 
     const cleanEmail = email.trim().toLowerCase();
 
-    // Try DB first (with hard 1.5s timeout so Atlas latency never blocks)
-    try {
-      const existingUser = await withTimeout(User.findOne({ email: cleanEmail }), 1500);
-      if (existingUser) {
-        return errorResponse(res, 400, 'An account with this email already exists');
-      }
-
-      const user = await withTimeout(
-        User.create({
-          name,
-          email: cleanEmail,
-          password,
-          role: role || 'student',
-          studentId: studentId || '',
-          phone: phone || '',
-        }),
-        2000
-      );
-
-      const token = generateToken(user._id);
-      return successResponse(res, 201, 'User registered successfully', {
-        token,
-        user: {
-          _id: user._id,
-          name: user.name,
-          email: user.email,
-          role: user.role,
-          studentId: user.studentId,
-          phone: user.phone,
-          favoriteStops: user.favoriteStops || [],
-          favoriteRoutes: user.favoriteRoutes || [],
-        },
-      });
-    } catch (dbErr) {
-      console.warn('[Register] DB unavailable, using demo mode:', dbErr.message);
+    // Try DB first with 8s timeout to accommodate Atlas latency
+    const existingUser = await withTimeout(User.findOne({ email: cleanEmail }), 8000);
+    if (existingUser) {
+      return errorResponse(res, 400, 'An account with this email already exists');
     }
 
-    // Demo/in-memory fallback — always succeeds
-    const fakeId = '66f1a' + Math.random().toString(16).substring(2, 19).padStart(19, '0');
-    const demoUser = {
-      _id: fakeId,
-      name,
-      email: cleanEmail,
-      role: role || 'student',
-      studentId: studentId || '12100000',
-      phone: phone || '+91 98765-00000',
-      favoriteStops: [],
-      favoriteRoutes: [],
-    };
-    DEMO_USERS[cleanEmail] = demoUser;
-    const token = generateToken(fakeId);
+    const user = await withTimeout(
+      User.create({
+        name,
+        email: cleanEmail,
+        password,
+        role: role || 'student',
+        studentId: studentId || '',
+        phone: phone || '',
+      }),
+      8000
+    );
 
-    return successResponse(res, 201, 'Registered successfully', {
+    const token = generateToken(user._id);
+    return successResponse(res, 201, 'User registered successfully', {
       token,
-      user: demoUser,
+      user: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        studentId: user.studentId,
+        phone: user.phone,
+        favoriteStops: user.favoriteStops || [],
+        favoriteRoutes: user.favoriteRoutes || [],
+      },
     });
-  } catch (error) {
-    next(error);
+  } catch (dbErr) {
+    if (dbErr.message && dbErr.message.includes('timed out')) {
+      return errorResponse(res, 503, 'Database temporarily unavailable. Please try again in a moment.');
+    }
+    next(dbErr);
   }
 };
 
@@ -138,44 +117,42 @@ const login = async (req, res, next) => {
 
     const cleanEmail = email.trim().toLowerCase();
 
-    // 1. Demo accounts — instant, no network needed
-    if (DEMO_USERS[cleanEmail] && password === 'password123') {
+    // 1. Fixed demo accounts — require EXACT password 'password123'
+    if (DEMO_USERS[cleanEmail]) {
+      if (password !== 'password123') {
+        return errorResponse(res, 401, 'Invalid email or password');
+      }
       const demoUser = DEMO_USERS[cleanEmail];
       const token = generateToken(demoUser._id);
       return successResponse(res, 200, 'Login successful', { token, user: demoUser });
     }
 
-    // 2. Try real DB (1.5s timeout)
+    // 2. Try real DB (8s timeout) — real users MUST have correct password
     try {
-      const user = await withTimeout(User.findOne({ email: cleanEmail }).select('+password'), 1500);
+      const user = await withTimeout(User.findOne({ email: cleanEmail }).select('+password'), 8000);
       if (user) {
         const isMatch = await user.matchPassword(password);
-        if (isMatch) {
-          const token = generateToken(user._id);
-          return successResponse(res, 200, 'Login successful', {
-            token,
-            user: {
-              _id: user._id,
-              name: user.name,
-              email: user.email,
-              role: user.role,
-              studentId: user.studentId,
-              phone: user.phone,
-              favoriteStops: user.favoriteStops || [],
-              favoriteRoutes: user.favoriteRoutes || [],
-            },
-          });
+        if (!isMatch) {
+          return errorResponse(res, 401, 'Invalid email or password');
         }
+        const token = generateToken(user._id);
+        return successResponse(res, 200, 'Login successful', {
+          token,
+          user: {
+            _id: user._id,
+            name: user.name,
+            email: user.email,
+            role: user.role,
+            studentId: user.studentId,
+            phone: user.phone,
+            favoriteStops: user.favoriteStops || [],
+            favoriteRoutes: user.favoriteRoutes || [],
+          },
+        });
       }
     } catch (dbErr) {
-      console.warn('[Login] DB unavailable:', dbErr.message);
-    }
-
-    // 3. Demo accounts with any password >= 6 chars (for in-memory registered users)
-    if (DEMO_USERS[cleanEmail] && password.length >= 6) {
-      const demoUser = DEMO_USERS[cleanEmail];
-      const token = generateToken(demoUser._id);
-      return successResponse(res, 200, 'Login successful', { token, user: demoUser });
+      console.error('[Login] DB error:', dbErr.message);
+      return errorResponse(res, 503, 'Database temporarily unavailable. Please try again.');
     }
 
     return errorResponse(res, 401, 'Invalid email or password');
@@ -197,11 +174,11 @@ const getMe = async (req, res, next) => {
       return successResponse(res, 200, 'Current user retrieved', { user: foundDemo });
     }
 
-    // Try real DB (1.5s timeout)
+    // Try real DB (8s timeout)
     try {
       const user = await withTimeout(
         User.findById(req.user._id).populate('favoriteStops').populate('favoriteRoutes'),
-        1500
+        8000
       );
       if (user) {
         return successResponse(res, 200, 'Current user retrieved', { user });
