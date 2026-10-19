@@ -25,17 +25,24 @@ const connectDB = async () => {
     console.log('[MongoDB]: Using default Atlas connection URI');
   }
 
-  try {
-    const conn = await mongoose.connect(uri, {
-      serverSelectionTimeoutMS: 10000,
-      connectTimeoutMS: 10000,
-    });
-    console.log(`[MongoDB Connected]: ${conn.connection.host}`);
-    return conn;
-  } catch (error) {
-    console.error(`[MongoDB Connection Error]: ${error.message}`);
-    console.error('The server will continue running. Please configure MONGO_URI on Render dashboard to enable database operations.');
-  }
+  const attemptConnect = async (attempt = 1) => {
+    try {
+      const conn = await mongoose.connect(uri, {
+        serverSelectionTimeoutMS: 10000,
+        connectTimeoutMS: 10000,
+      });
+      console.log(`[MongoDB Connected]: ${conn.connection.host}`);
+      return conn;
+    } catch (error) {
+      console.error(`[MongoDB Connection Error (attempt ${attempt})]: ${error.message}`);
+      if (attempt < 5) {
+        console.log(`[MongoDB] Retrying in 4 seconds (attempt ${attempt + 1}/5)...`);
+        setTimeout(() => attemptConnect(attempt + 1), 4000);
+      }
+    }
+  };
+
+  return attemptConnect();
 };
 
 module.exports = connectDB;

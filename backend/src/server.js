@@ -86,11 +86,12 @@ app.get('/api/health', (req, res) => {
 
   res.json({
     success: true,
-    message: 'Campus Transport Management System API is running smoothly',
+    version: '1.0.4-atlas',
     timestamp: new Date(),
     database: {
       status: dbStatus,
       readyState: dbState,
+      host: mongoose.connection.host || null,
     },
     simulation: simulationService.getStatus(),
   });
