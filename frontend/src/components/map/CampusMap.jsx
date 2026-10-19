@@ -6,13 +6,15 @@ import CapacityIndicator from '../common/CapacityIndicator';
 
 const TILE_LAYERS = {
   street: {
-    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+    subdomains: 'abcd',
     label: 'Street',
   },
   satellite: {
     url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
     attribution: 'Tiles &copy; Esri &mdash; Source: Esri, USGS, NOAA',
+    subdomains: 'abc',
     label: 'Satellite',
   },
 };
@@ -309,7 +311,8 @@ export default function CampusMap({
           key={tileMode}
           attribution={currentTile.attribution}
           url={currentTile.url}
-          maxZoom={tileMode === 'satellite' ? 19 : 19}
+          subdomains={currentTile.subdomains || 'abcd'}
+          maxZoom={19}
         />
 
         {/* Route Polylines */}
