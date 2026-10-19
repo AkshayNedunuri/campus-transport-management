@@ -2,6 +2,8 @@ const mongoose = require('mongoose');
 
 function sanitizeMongoUri(rawUri) {
   if (!rawUri) return rawUri;
+  // Strip accidental surrounding quotes and whitespace (common Render/env var mistake)
+  rawUri = rawUri.trim().replace(/^["'`]+|["'`]+$/g, '').trim();
   try {
     const match = rawUri.match(/^(mongodb(?:\+srv)?:\/\/)([^:]+):(.+)@([^@\/]+)(.*)$/);
     if (match) {
