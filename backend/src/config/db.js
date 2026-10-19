@@ -17,12 +17,12 @@ function sanitizeMongoUri(rawUri) {
 }
 
 const connectDB = async () => {
-  const rawUri = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/campus_transport';
+  const DEFAULT_ATLAS_URI = 'mongodb+srv://AkshayNedunuri:%40k17shaY@wealthdb.hwpgkoz.mongodb.net/campus_transport?retryWrites=true&w=majority&appName=wealthdb';
+  const rawUri = process.env.MONGO_URI || process.env.MONGO_URL || process.env.MONGODB_URI || process.env.DATABASE_URL || DEFAULT_ATLAS_URI;
   const uri = sanitizeMongoUri(rawUri);
 
-  if (!process.env.MONGO_URI && process.env.NODE_ENV === 'production') {
-    console.warn('\n⚠️ [MongoDB Warning]: MONGO_URI is not set in your environment variables.');
-    console.warn('⚠️ Please add your MongoDB Atlas connection string to Render Environment tab.\n');
+  if (!process.env.MONGO_URI && !process.env.MONGO_URL && !process.env.MONGODB_URI) {
+    console.log('[MongoDB]: Using default Atlas connection URI');
   }
 
   try {
