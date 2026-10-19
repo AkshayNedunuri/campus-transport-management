@@ -1,6 +1,9 @@
 require('dotenv').config();
 const express = require('express');
 const http = require('http');
+const path = require('path');
+const fs = require('fs');
+const mongoose = require('mongoose');
 const { Server } = require('socket.io');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -75,7 +78,6 @@ if (process.env.NODE_ENV !== 'production') {
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-const mongoose = require('mongoose');
 
 // API Healthcheck Route
 app.get('/api/health', (req, res) => {
@@ -107,7 +109,6 @@ app.use('/api/admin', adminRoutes);
 
 // In production or unified deployment: serve built frontend static assets if available
 const frontendDistPath = path.join(__dirname, '../../frontend/dist');
-const fs = require('fs');
 
 if (fs.existsSync(frontendDistPath)) {
   app.use(express.static(frontendDistPath));
