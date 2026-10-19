@@ -48,10 +48,11 @@ const io = new Server(server, {
 // Pass IO to socket handler & simulation
 setupSockets(io);
 
-// Security Middleware (configure helmet to not block cross-origin requests in development)
+// Security Middleware (configure helmet to not block OpenStreetMap/ArcGIS map tiles and cross-origin requests)
 app.use(
   helmet({
     crossOriginResourcePolicy: false,
+    contentSecurityPolicy: false,
   })
 );
 
